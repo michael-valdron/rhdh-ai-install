@@ -1,2 +1,3 @@
-# rhdh-ai-cli
-CLI tool to add AI integrations to Red Hat Developer Hub
+# rhdh-ai-install
+
+An AI integrations library and tool for installing to Red Hat Developer Hub 
