@@ -3,14 +3,11 @@
 build: vendor
 	go build -o bin/rhdh-ai-install
 
-test: vendor
+test: build
 	go test -v ./...
 
 vendor:
 	go mod vendor
-
-run: vendor
-	go run main.go
 
 clean:
 	rm -rf bin
