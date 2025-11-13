@@ -1,9 +1,7 @@
 package constants
 
 const (
-	AppName               = "rhdh-ai"
-	DefaultRHDHNamespace  = "ai-rhdh"
+	AppName               = "rhdh-ai-install"
 	DefaultIsOperator     = false
 	DefaultRHOAINamespace = "rhoai-model-registries"
-	FilePerm              = 0644
 )
