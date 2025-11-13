@@ -30,6 +30,20 @@ func patchBackstageCR(ctx context.Context, c *client.Client, name string) error 
 	return c.PatchUnstructured(ctx, gvr, deploymentPatch, metav1.PatchOptions{})
 }
 
+func unpatchBackstageCR(ctx context.Context, c *client.Client, name string) error {
+	gvr := deployment.NewBackstageGVR()
+	deploymentPatch, err := c.GetUnstructured(ctx, gvr, name, client.ClientParams{}, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+
+	if err = deployment.UnpatchBackstageSpec(deploymentPatch); err != nil {
+		return err
+	}
+
+	return c.PatchUnstructured(ctx, gvr, deploymentPatch, metav1.PatchOptions{})
+}
+
 func patchDeployment(ctx context.Context, c *client.Client, name string) error {
 	deploymentPatch, err := c.Deployments(client.ClientParams{}).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
@@ -37,6 +51,19 @@ func patchDeployment(ctx context.Context, c *client.Client, name string) error {
 	}
 
 	if err = deployment.PatchDeploymentSpec(deploymentPatch); err != nil {
+		return err
+	}
+
+	return deployment.PatchDeployment(ctx, c, deploymentPatch, metav1.PatchOptions{})
+}
+
+func unpatchDeployment(ctx context.Context, c *client.Client, name string) error {
+	deploymentPatch, err := c.Deployments(client.ClientParams{}).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+
+	if err = deployment.UnpatchDeploymentSpec(deploymentPatch); err != nil {
 		return err
 	}
 
@@ -173,6 +200,9 @@ func UnpatchDynamicPlugins(ctx context.Context, c *client.Client, configMapName 
 	}
 }
 
+// Patches given RHDH deployment with model catalog integration sidecars.
+// Patches Backstage CR if targeting an RHDH operator install else patches the
+// deployment spec instead.
 func PatchDeployment(ctx context.Context, c *client.Client, name string) error {
 	if c.Options.RhdhOperator {
 		return patchBackstageCR(ctx, c, name)
@@ -181,6 +211,20 @@ func PatchDeployment(ctx context.Context, c *client.Client, name string) error {
 	}
 }
 
+// Removes patches from the given RHDH deployment with model catalog integration sidecars.
+// Removes patches from Backstage CR if targeting an RHDH operator install else removes from the
+// deployment spec instead.
+func UnpatchDeployment(ctx context.Context, c *client.Client, name string) error {
+	if c.Options.RhdhOperator {
+		return unpatchBackstageCR(ctx, c, name)
+	} else {
+		return unpatchDeployment(ctx, c, name)
+	}
+}
+
+// Checks if model catalog integration resources, plugins, and sidecars can be installed to a given RHDH deployment.
+// Check ensures all required input fields are set, OpenShift cluster has the required operators installed, and does not
+// already contain an installation or conflicts to the installation of the model catalog integration.
 func Check(ctx context.Context, c *client.Client, cfg config.Config) error {
 	var (
 		modelRegistriesNamespace string                              = config.GetModelRegistriesNamespace(&cfg)
@@ -227,10 +271,56 @@ func Check(ctx context.Context, c *client.Client, cfg config.Config) error {
 	return nil
 }
 
+// Installs model catalog integration resources, plugins, and sidecars from a given RHDH deployment.
+// Runs `Check` before installing.
 func Install(ctx context.Context, c *client.Client, cfg config.Config) error {
-	panic("unimplemented")
+	var rhdhNamespace string
+	if err := Check(ctx, c, cfg); err != nil {
+		return err
+	}
+
+	if cfg.Global.DeveloperHub.Namespace != "" {
+		rhdhNamespace = cfg.Global.DeveloperHub.Namespace
+	} else {
+		rhdhNamespace = c.Namespace
+	}
+
+	if err := CreateServiceAccount(ctx, c, rhdhNamespace, config.GetModelRegistriesNamespace(&cfg)); err != nil {
+		return err
+	}
+
+	if err := PatchDynamicPlugins(ctx, c, cfg.Global.DeveloperHub.PluginsName); err != nil {
+		return err
+	}
+
+	if err := PatchDeployment(ctx, c, cfg.Global.DeveloperHub.DeployName); err != nil {
+		return err
+	}
+
+	return nil
 }
 
+// Uninstalls model catalog integration resources, plugins, and sidecars from a given RHDH deployment.
 func Uninstall(ctx context.Context, c *client.Client, cfg config.Config) error {
-	panic("unimplemented")
+	var rhdhNamespace string
+
+	if cfg.Global.DeveloperHub.Namespace != "" {
+		rhdhNamespace = cfg.Global.DeveloperHub.Namespace
+	} else {
+		rhdhNamespace = c.Namespace
+	}
+
+	if err := UnpatchDeployment(ctx, c, cfg.Global.DeveloperHub.DeployName); err != nil {
+		return err
+	}
+
+	if err := UnpatchDynamicPlugins(ctx, c, cfg.Global.DeveloperHub.PluginsName); err != nil {
+		return err
+	}
+
+	if err := DeleteServiceAccount(ctx, c, rhdhNamespace, config.GetModelRegistriesNamespace(&cfg)); err != nil {
+		return err
+	}
+
+	return nil
 }
