@@ -27,6 +27,26 @@ func findCRDFunc(kind string, group string) func(apiextv1.CustomResourceDefiniti
 	}
 }
 
+func findDeploymentFromAllNamespaces(ctx context.Context, c *client.Client, deploymentName string) (*appsv1.Deployment, error) {
+	errs := []any{}
+	namespaces, err := c.Namespaces().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("unexpected error trying to fetch the OpenShift AI operator controller deployment: %v", err)
+	}
+
+	for _, namespace := range namespaces.Items {
+		if deployment, err := c.Deployments(client.ClientParams{Namespace: namespace.Name}).Get(ctx, deploymentName, metav1.GetOptions{}); err == nil {
+			return deployment, nil
+		} else if !errors.IsNotFound(err) {
+			return nil, fmt.Errorf("unexpected error trying to fetch the OpenShift AI operator controller deployment: %v", err)
+		} else {
+			errs = append(errs, err)
+		}
+	}
+
+	return nil, fmt.Errorf("%s", util.Join(errs, "\n"))
+}
+
 func checkForOpenShiftAI(ctx context.Context, c *client.Client, crds *apiextv1.CustomResourceDefinitionList) error {
 	var (
 		err        error
@@ -35,9 +55,13 @@ func checkForOpenShiftAI(ctx context.Context, c *client.Client, crds *apiextv1.C
 
 	if deployment, err = c.Deployments(client.ClientParams{Namespace: defaultRHOAIOperatorNamespace}).Get(ctx, rhoaiOperatorControllerName, metav1.GetOptions{}); err != nil {
 		if errors.IsNotFound(err) {
-			return fmt.Errorf("the OpenShift AI component appears to be not fully installed, missing controller: %v", err)
+			var errs error
+			deployment, errs = findDeploymentFromAllNamespaces(ctx, c, rhoaiOperatorControllerName)
+			if errs != nil {
+				return fmt.Errorf("the OpenShift AI component appears to be not fully installed, missing controller: %s", fmt.Sprintf("%v\n%v", err, errs))
+			}
 		} else {
-			return fmt.Errorf("unexpected error trying to fetch the OpenShift AI operator controller deployment")
+			return fmt.Errorf("unexpected error trying to fetch the OpenShift AI operator controller deployment: %v", err)
 		}
 	}
 
