@@ -7,33 +7,42 @@ import (
 	"time"
 )
 
+// OptionsConfig holds general library configuration options (e.g., such as setting debugging mode, dry-run mode, log level, and timeout for operations).
 type OptionsConfig struct {
-	Debug    bool          `json:"debug,omitempty"`
-	DryRun   bool          `json:"dry-run,omitempty"`
-	LogLevel *slog.Level   `json:"log-level,omitempty"`
-	Timeout  time.Duration `json:"timeout,omitempty"`
+	Debug    bool          `json:"debug,omitempty"`     // Enable debug mode if true; otherwise, false by default.
+	DryRun   bool          `json:"dry-run,omitempty"`   // Run in dry-run mode if true; otherwise, normal execution mode by default.
+	LogLevel *slog.Level   `json:"log-level,omitempty"` // Set the log level for logging messages (e.g., DEBUG, INFO, WARN, ERROR).
+	Timeout  time.Duration `json:"timeout,omitempty"`   // Timeout duration for operations; if not specified, uses default timeout.
 }
 
+// DeveloperHubConfig contains configuration details for the target developer hub deployment.
 type DeveloperHubConfig struct {
-	Namespace     string `json:"namespace,omitempty"`
-	DeployName    string `json:"name,omitempty"`
-	PluginsName   string `json:"plugins,omitempty"`
-	AppConfigName string `json:"appconfig,omitempty"`
-	IsOperator    bool   `json:"operator,omitempty"`
+	Namespace     string `json:"namespace,omitempty"` // Namespace where the developer hub resources are deployed.
+	DeployName    string `json:"name,omitempty"`      // Name of the developer hub deployment (Backstage CR name if IsOperator is true).
+	PluginsName   string `json:"plugins,omitempty"`   // Name of the plugins configmap for the developer hub deployment.
+	AppConfigName string `json:"appconfig,omitempty"` // Name of the appconfig configmap for the developer hub deployment.
+	IsOperator    bool   `json:"operator,omitempty"`  // Indicates if the deployment is an operator-managed one; defaults to false.
 }
 
+// LocationConfig encapsulates configuration parameters for the location sidecar container, including its image.
+// If not set in ModelCatalogConfig, it assumes default values; otherwise, the Image field overrides the default image to use.
 type LocationConfig struct {
-	Image string `json:"image,omitempty"`
+	Image string `json:"image,omitempty"` // Custom image for the location sidecar container; if omitted, defaults are used.
 }
 
+// StorageRestConfig encapsulates configuration parameters for the storage-rest sidecar container, including its image.
+// If not set in ModelCatalogConfig, it assumes default values; otherwise, the Image field overrides the default image to use.
 type StorageRestConfig struct {
-	Image string `json:"image,omitempty"`
+	Image string `json:"image,omitempty"` // Custom image for the storage-rest sidecar container; if omitted, defaults are used.
 }
 
+// NormalizerConfig encapsulates configuration parameters for the normalizer sidecar container, including its image.
+// If not set in ModelCatalogConfig, it assumes default values; otherwise, the Image field overrides the default image to use.
 type NormalizerConfig struct {
-	Image string `json:"image,omitempty"`
+	Image string `json:"image,omitempty"` // Custom image for the normalizer sidecar container; if omitted, defaults are used.
 }
 
+// ModelCatalogConfig encapsulates all configuration parameters specific to the model catalog integration.
 type ModelCatalogConfig struct {
 	ModelRegistriesNamespace string             `json:"model-registries-namespace,omitempty"`
 	ServiceAccountName       string             `json:"serviceaccount,omitempty"`
@@ -43,50 +52,59 @@ type ModelCatalogConfig struct {
 	Normalizer               *NormalizerConfig  `json:"normalizer,omitempty"`
 }
 
+// GlobalConfig aggregates all global configuration settings used across various integrations.
 type GlobalConfig struct {
 	Options      *OptionsConfig     `json:"options,omitempty"`
 	DeveloperHub DeveloperHubConfig `json:"developer-hub"`
 }
 
+// Config is the main configuration structure that serves as a container for global and integration-specific configurations.
 type Config struct {
 	Global       GlobalConfig       `json:"global"`
 	ModelCatalog ModelCatalogConfig `json:"model-catalog"`
 }
 
-// ensures required global fields are set
+// Ensures required global fields for a developer hub deployment are set.
 func (c *Config) globalCheck() error {
 	if c.Global.DeveloperHub.DeployName != "" {
 		return fmt.Errorf("name of the developer hub deployment should be specified")
-	} else if c.Global.DeveloperHub.AppConfigName != "" {
+	}
+
+	if c.Global.DeveloperHub.AppConfigName != "" {
 		return fmt.Errorf("appconfig configmap name of the developer hub deployment should be specified")
-	} else if c.Global.DeveloperHub.PluginsName != "" {
+	}
+
+	if c.Global.DeveloperHub.PluginsName != "" {
 		return fmt.Errorf("plugins configmap name of the developer hub deployment should be specified")
 	}
 
 	return nil
 }
 
-// ensures all required field for given library function path are set
+// Ensures all required fields for a given library function path are set.
 func (c *Config) Check(funcPath FuncPath) error {
 	if err := c.globalCheck(); err != nil {
 		return err
 	}
+
 	switch funcPath {
 	case ModelCatalogCheck:
-		return nil
+		return nil // No additional checks required for this function path.
 	case ModelCatalogInstall:
-		return nil
+		return nil // No additional checks required for this function path.
 	case ModelCatalogUninstall:
-		return nil
+		return nil // No additional checks required for this function path.
 	default:
 		return fmt.Errorf("function path undefined")
 	}
 }
 
+// Marshal converts the Config structure into JSON bytes.
 func (c *Config) Marshal() ([]byte, error) {
 	return json.Marshal(c)
 }
 
+// Unmarshal deserializes JSON bytes into the Config structure.
 func (c *Config) Unmarshal(data []byte) error {
 	return json.Unmarshal(data, c)
 }

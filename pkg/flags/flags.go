@@ -29,12 +29,12 @@ type CheckFlags struct {
 }
 
 func NewRootFlags() *RootFlags {
-	logLevel := defaultLogLevel
+	logLevel := constants.DefaultLogLevel
 	return &RootFlags{
 		Debug:    false,
 		DryRun:   false,
 		LogLevel: &logLevel,
-		Timeout:  defaultTimeout,
+		Timeout:  constants.DefaultTimeout,
 	}
 }
 
