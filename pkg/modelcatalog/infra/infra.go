@@ -13,6 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// getCRDs retrieves a list of CustomResourceDefinitions from the Kubernetes API server.
 func getCRDs(ctx context.Context, c *client.Client) (*apiextv1.CustomResourceDefinitionList, error) {
 	if crds, err := c.CustomResourceDefinitions().List(ctx, metav1.ListOptions{}); err != nil {
 		return nil, fmt.Errorf("error occurred trying to fetch the CRDs: %v", err)
@@ -21,12 +22,14 @@ func getCRDs(ctx context.Context, c *client.Client) (*apiextv1.CustomResourceDef
 	}
 }
 
+// findCRDFunc returns a function that checks if a CustomResourceDefinition matches a given kind and group.
 func findCRDFunc(kind string, group string) func(apiextv1.CustomResourceDefinition) bool {
 	return func(crd apiextv1.CustomResourceDefinition) bool {
 		return crd.Kind == kind && crd.GroupVersionKind().Group == group
 	}
 }
 
+// findDeploymentFromAllNamespaces searches for a Deployment across all namespaces by the given name.
 func findDeploymentFromAllNamespaces(ctx context.Context, c *client.Client, deploymentName string) (*appsv1.Deployment, error) {
 	errs := []any{}
 	namespaces, err := c.Namespaces().List(ctx, metav1.ListOptions{})
@@ -47,13 +50,16 @@ func findDeploymentFromAllNamespaces(ctx context.Context, c *client.Client, depl
 	return nil, fmt.Errorf("%s", util.Join(errs, "\n"))
 }
 
+// checkForOpenShiftAI checks if the OpenShift AI component is installed and ready.
 func checkForOpenShiftAI(ctx context.Context, c *client.Client, crds *apiextv1.CustomResourceDefinitionList) error {
 	var (
 		err        error
 		deployment *appsv1.Deployment
 	)
 
+	// Attempt to fetch the OpenShift AI operator controller deployment from the default namespace.
 	if deployment, err = c.Deployments(client.ClientParams{Namespace: defaultRHOAIOperatorNamespace}).Get(ctx, rhoaiOperatorControllerName, metav1.GetOptions{}); err != nil {
+		// If not found and it's a not-found error, try to find the deployment across all namespaces.
 		if errors.IsNotFound(err) {
 			var errs error
 			deployment, errs = findDeploymentFromAllNamespaces(ctx, c, rhoaiOperatorControllerName)
@@ -61,20 +67,24 @@ func checkForOpenShiftAI(ctx context.Context, c *client.Client, crds *apiextv1.C
 				return fmt.Errorf("the OpenShift AI component appears to be not fully installed, missing controller: %s", fmt.Sprintf("%v\n%v", err, errs))
 			}
 		} else {
+			// If there's another error, return it.
 			return fmt.Errorf("unexpected error trying to fetch the OpenShift AI operator controller deployment: %v", err)
 		}
 	}
 
+	// Check if the deployment is ready.
 	if deployment.Status.ReadyReplicas == 0 {
 		return fmt.Errorf("the OpenShift AI operator controller is not ready")
 	}
 
+	// If CRDs are not yet fetched, do so now.
 	if crds == nil {
 		if crds, err = getCRDs(ctx, c); err != nil {
 			return err
 		}
 	}
 
+	// Verify the presence of required OpenShift AI CRD.
 	if !slices.ContainsFunc(crds.Items, findCRDFunc(dataScienceClusterKind, dataScienceClusterGroup)) {
 		return fmt.Errorf("missing component required %s CRD, please finish installing or reinstall OpenShift AI required component", dataScienceClusterKind)
 	}
@@ -82,30 +92,37 @@ func checkForOpenShiftAI(ctx context.Context, c *client.Client, crds *apiextv1.C
 	return nil
 }
 
+// checkForNvidiaGPU checks if the Nvidia GPU component is installed and ready.
 func checkForNvidiaGPU(ctx context.Context, c *client.Client, crds *apiextv1.CustomResourceDefinitionList) error {
 	var (
 		err        error
 		deployment *appsv1.Deployment
 	)
 
+	// Attempt to fetch the Nvidia GPU operator controller deployment from the default namespace.
 	if deployment, err = c.Deployments(client.ClientParams{Namespace: defaultNvidiaGPUOperatorNamespace}).Get(ctx, nvidiaGPUOperatorControllerName, metav1.GetOptions{}); err != nil {
+		// If not found and it's a not-found error, try to find the deployment across all namespaces.
 		if errors.IsNotFound(err) {
 			return fmt.Errorf("the Nvidia GPU component appears to be not fully installed, missing controller: %v", err)
 		} else {
+			// If there's another error, return it.
 			return fmt.Errorf("unexpected error trying to fetch the Nvidia GPU operator controller deployment")
 		}
 	}
 
+	// Check if the deployment is ready.
 	if deployment.Status.ReadyReplicas == 0 {
 		return fmt.Errorf("the Nvidia GPU operator controller is not ready")
 	}
 
+	// If CRDs are not yet fetched, do so now.
 	if crds == nil {
 		if crds, err = getCRDs(ctx, c); err != nil {
 			return err
 		}
 	}
 
+	// Verify the presence of required Nvidia GPU CRD.
 	if !slices.ContainsFunc(crds.Items, findCRDFunc(clusterPolicyKind, clusterPolicyGroup)) {
 		return fmt.Errorf("missing model catalog required %s CRD, please finish installing or reinstall Nvidia GPU required component", clusterPolicyKind)
 	}
@@ -113,30 +130,37 @@ func checkForNvidiaGPU(ctx context.Context, c *client.Client, crds *apiextv1.Cus
 	return nil
 }
 
+// checkForNodeFeatureDiscovery checks if the Node Feature Discovery component is installed and ready.
 func checkForNodeFeatureDiscovery(ctx context.Context, c *client.Client, crds *apiextv1.CustomResourceDefinitionList) error {
 	var (
 		err        error
 		deployment *appsv1.Deployment
 	)
 
+	// Attempt to fetch the Node Feature Discovery operator controller deployment from the default namespace.
 	if deployment, err = c.Deployments(client.ClientParams{Namespace: defaultNFDOperatorNamespace}).Get(ctx, nfdOperatorControllerName, metav1.GetOptions{}); err != nil {
+		// If not found and it's a not-found error, return an error indicating the component is missing.
 		if errors.IsNotFound(err) {
 			return fmt.Errorf("the Node Feature Discovery component appears to be not fully installed, missing controller: %v", err)
 		} else {
+			// If there's another unexpected error, return it.
 			return fmt.Errorf("unexpected error trying to fetch the Node Feature Discovery operator controller deployment")
 		}
 	}
 
+	// Check if the deployment is ready.
 	if deployment.Status.ReadyReplicas == 0 {
 		return fmt.Errorf("the Node Feature Discovery operator controller is not ready")
 	}
 
+	// If CRDs are not yet fetched, do so now.
 	if crds == nil {
 		if crds, err = getCRDs(ctx, c); err != nil {
 			return err
 		}
 	}
 
+	// Verify the presence of required Node Feature Discovery CRD.
 	if !slices.ContainsFunc(crds.Items, findCRDFunc(nfdKind, nfdGroup)) {
 		return fmt.Errorf("missing model catalog required %s CRD, please finish installing or reinstall Node Feature Discovery required component", nfdKind)
 	}
@@ -144,44 +168,75 @@ func checkForNodeFeatureDiscovery(ctx context.Context, c *client.Client, crds *a
 	return nil
 }
 
+// checkForKMM checks if the Kernel Module Management (KMM) component is installed and ready.
 func checkForKMM(ctx context.Context, c *client.Client) error {
-	if deployment, err := c.Deployments(client.ClientParams{Namespace: defaultKMMOperatorNamespace}).Get(ctx, kmmOperatorControllerName, metav1.GetOptions{}); err != nil {
+	var (
+		err        error
+		deployment *appsv1.Deployment
+	)
+
+	// Attempt to fetch the KMM operator controller deployment from the default namespace.
+	if deployment, err = c.Deployments(client.ClientParams{Namespace: defaultKMMOperatorNamespace}).Get(ctx, kmmOperatorControllerName, metav1.GetOptions{}); err != nil {
+		// If not found and it's a not-found error, return an error indicating the component is missing.
 		if errors.IsNotFound(err) {
 			return fmt.Errorf("the Kernel Module Management (KMM) component appears to be not fully installed, missing controller: %v", err)
 		} else {
+			// If there's another unexpected error, return it.
 			return fmt.Errorf("unexpected error trying to fetch the Kernel Module Management (KMM) operator controller deployment")
 		}
-	} else if deployment.Status.ReadyReplicas == 0 {
+	}
+
+	// Check if the KMM operator controller deployment is ready.
+	if deployment.Status.ReadyReplicas == 0 {
 		return fmt.Errorf("the Kernel Module Management (KMM) operator controller is not ready")
 	}
 
-	if deployment, err := c.Deployments(client.ClientParams{Namespace: defaultKMMOperatorNamespace}).Get(ctx, kmmOperatorWebhookName, metav1.GetOptions{}); err != nil {
+	// Attempt to fetch the KMM operator webhook deployment from the default namespace.
+	if deployment, err = c.Deployments(client.ClientParams{Namespace: defaultKMMOperatorNamespace}).Get(ctx, kmmOperatorWebhookName, metav1.GetOptions{}); err != nil {
+		// If not found and it's a not-found error, return an error indicating the component is missing.
 		if errors.IsNotFound(err) {
 			return fmt.Errorf("the Kernel Module Management (KMM) component appears to be not fully installed, missing webhook: %v", err)
 		} else {
+			// If there's another unexpected error, return it.
 			return fmt.Errorf("unexpected error trying to fetch the Kernel Module Management (KMM) operator webhook deployment")
 		}
-	} else if deployment.Status.ReadyReplicas == 0 {
+	}
+
+	// Check if the KMM operator webhook deployment is ready.
+	if deployment.Status.ReadyReplicas == 0 {
 		return fmt.Errorf("the Kernel Module Management (KMM) operator webhook is not ready")
 	}
 
 	return nil
 }
 
+// checkForAuthorino checks if the Authorino component is installed and ready.
 func checkForAuthorino(ctx context.Context, c *client.Client) error {
-	if deployment, err := c.Deployments(client.ClientParams{Namespace: defaultAuthorinoOperatorNamespace}).Get(ctx, authorinoOperatorControllerName, metav1.GetOptions{}); err != nil {
+	var (
+		deployment *appsv1.Deployment
+		err        error
+	)
+
+	// Attempt to fetch the Authorino operator controller deployment from the default namespace.
+	if deployment, err = c.Deployments(client.ClientParams{Namespace: defaultAuthorinoOperatorNamespace}).Get(ctx, authorinoOperatorControllerName, metav1.GetOptions{}); err != nil {
+		// If not found and it's a not-found error, return an error indicating the component is missing.
 		if errors.IsNotFound(err) {
 			return fmt.Errorf("the Authorino component appears to be not fully installed, missing controller: %v", err)
 		} else {
+			// If there's another unexpected error, return it.
 			return fmt.Errorf("unexpected error trying to fetch the Authorino operator controller deployment")
 		}
-	} else if deployment.Status.ReadyReplicas == 0 {
+	}
+
+	// Check if the Authorino operator controller deployment is ready.
+	if deployment.Status.ReadyReplicas == 0 {
 		return fmt.Errorf("the Authorino operator controller is not ready")
 	}
 
 	return nil
 }
 
+// Check verifies if all required components for model catalog infrastructure are installed and ready.
 func Check(ctx context.Context, c *client.Client) error {
 	errs := []any{}
 	var (
