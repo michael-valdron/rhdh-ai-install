@@ -42,9 +42,11 @@ func findDeploymentFromAllNamespaces(ctx context.Context, c *client.Client, depl
 			return deployment, nil
 		} else if !errors.IsNotFound(err) {
 			return nil, fmt.Errorf("unexpected error trying to fetch the OpenShift AI operator controller deployment: %v", err)
-		} else {
-			errs = append(errs, err)
 		}
+	}
+
+	if len(errs) == 0 {
+		errs = append(errs, fmt.Errorf("not found the deployment %s under any namespace", deploymentName))
 	}
 
 	return nil, fmt.Errorf("%s", util.Join(errs, "\n"))
@@ -250,19 +252,29 @@ func Check(ctx context.Context, c *client.Client) error {
 	}
 
 	// Check for OpenShift AI
-	errs = append(errs, checkForOpenShiftAI(ctx, c, crds))
+	if err = checkForOpenShiftAI(ctx, c, crds); err != nil {
+		errs = append(errs, err)
+	}
 
 	// Check for Node Feature Discovery
-	errs = append(errs, checkForNodeFeatureDiscovery(ctx, c, crds))
+	if err = checkForNodeFeatureDiscovery(ctx, c, crds); err != nil {
+		errs = append(errs, err)
+	}
 
 	// Check for Nvidia GPU
-	errs = append(errs, checkForNvidiaGPU(ctx, c, crds))
+	if err = checkForNvidiaGPU(ctx, c, crds); err != nil {
+		errs = append(errs, err)
+	}
 
 	// Check for KMM
-	errs = append(errs, checkForKMM(ctx, c))
+	if err = checkForKMM(ctx, c); err != nil {
+		errs = append(errs, err)
+	}
 
 	// Check for Authorino
-	errs = append(errs, checkForAuthorino(ctx, c))
+	if err = checkForAuthorino(ctx, c); err != nil {
+		errs = append(errs, err)
+	}
 
 	if len(errs) != 0 {
 		if c.Options.Verbose {
