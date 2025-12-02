@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	"github.com/redhat-ai-dev/rhdh-ai-install/pkg/client"
+	"github.com/redhat-ai-dev/rhdh-ai-install/pkg/config"
 	"github.com/redhat-ai-dev/rhdh-ai-install/pkg/modelcatalog/serviceaccount"
 	"github.com/redhat-ai-dev/rhdh-ai-install/pkg/util"
 	corev1 "k8s.io/api/core/v1"
@@ -46,7 +47,7 @@ func getBackstageContainerByNameFunc(name string) func(map[string]any) bool {
 	return func(container map[string]any) bool { return container["name"] == name }
 }
 
-func patchBackstageContainers(backstageSpec *unstructured.Unstructured, rootPath []any, subPath []any) error {
+func patchBackstageContainers(cfg config.ModelCatalogConfig, backstageSpec *unstructured.Unstructured, rootPath []any, subPath []any) error {
 	var (
 		locationContainer    map[string]any
 		storageRestContainer map[string]any
@@ -60,15 +61,15 @@ func patchBackstageContainers(backstageSpec *unstructured.Unstructured, rootPath
 		subPath = subPath[idx+1:]
 	}
 
-	if locationContainer, err = getUnstructuredContainer(getLocationContainer()); err != nil {
+	if locationContainer, err = getUnstructuredContainer(getLocationContainer(cfg.Location)); err != nil {
 		return err
 	}
 
-	if storageRestContainer, err = getUnstructuredContainer(getStorageRestContainer()); err != nil {
+	if storageRestContainer, err = getUnstructuredContainer(getStorageRestContainer(cfg.StorageRest)); err != nil {
 		return err
 	}
 
-	if normalizerContainer, err = getUnstructuredContainer(getNormalizerContainer()); err != nil {
+	if normalizerContainer, err = getUnstructuredContainer(getNormalizerContainer(cfg.Normalizer)); err != nil {
 		return err
 	}
 
@@ -104,7 +105,7 @@ func NewBackstageGVR() *schema.GroupVersionResource {
 	}
 }
 
-func PatchBackstageSpec(backstageSpec *unstructured.Unstructured) error {
+func PatchBackstageSpec(cfg config.ModelCatalogConfig, backstageSpec *unstructured.Unstructured) error {
 	serviceAccountTokenName := serviceaccount.GetServiceAccountTokenName(serviceaccount.ServiceAccountName)
 
 	// Patch volume mount to backstage container for service account token volume
@@ -153,7 +154,7 @@ func PatchBackstageSpec(backstageSpec *unstructured.Unstructured) error {
 			break
 		}
 	}
-	return patchBackstageContainers(backstageSpec, rootPath, subPath)
+	return patchBackstageContainers(cfg, backstageSpec, rootPath, subPath)
 }
 
 func UnpatchBackstageSpec(backstageSpec *unstructured.Unstructured) error {

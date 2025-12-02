@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"github.com/redhat-ai-dev/rhdh-ai-install/pkg/client"
+	"github.com/redhat-ai-dev/rhdh-ai-install/pkg/config"
 	"github.com/redhat-ai-dev/rhdh-ai-install/pkg/modelcatalog/serviceaccount"
 	"github.com/redhat-ai-dev/rhdh-ai-install/pkg/util"
 	appsv1 "k8s.io/api/apps/v1"
@@ -14,26 +15,10 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-var (
-	normalizerEnvVar = corev1.EnvVar{
-		Name:  "NORMALIZER_FORMAT",
-		Value: "JsonArrayFormat",
-	}
-	storageRestEnvVars = []corev1.EnvVar{
-		{
-			Name:  "STORAGE_TYPE",
-			Value: "ConfigMap",
-		},
-		{
-			Name:  "BRIDGE_URL",
-			Value: "http://localhost:9090",
-		},
-	}
-	pluginsVolumeMount = corev1.VolumeMount{
-		MountPath: "/opt/app-root/src/dynamic-plugins-root",
-		Name:      "dynamic-plugins-root",
-	}
-)
+var pluginsVolumeMount = corev1.VolumeMount{
+	MountPath: "/opt/app-root/src/dynamic-plugins-root",
+	Name:      "dynamic-plugins-root",
+}
 
 func getPodEnvVars() []corev1.EnvVar {
 	return []corev1.EnvVar{
@@ -84,12 +69,12 @@ func getServiceAccountVolume() corev1.Volume {
 	}
 }
 
-func getLocationContainer() corev1.Container {
+func getLocationContainer(cfg *config.LocationConfig) corev1.Container {
 	return corev1.Container{
 		Name:            locationContainerName,
-		Image:           "quay.io/redhat-ai-dev/model-catalog-location-service:latest",
+		Image:           config.GetLocationImage(cfg),
 		ImagePullPolicy: corev1.PullAlways,
-		Env:             append(getPodEnvVars(), normalizerEnvVar),
+		Env:             append(getPodEnvVars(), config.GetLocationEnvVars(cfg)...),
 		EnvFrom:         []corev1.EnvFromSource{getServiceAccountTokenRef()},
 		Ports: []corev1.ContainerPort{
 			{
@@ -103,28 +88,34 @@ func getLocationContainer() corev1.Container {
 	}
 }
 
-func getStorageRestContainer() corev1.Container {
+func getStorageRestContainer(cfg *config.StorageRestConfig) corev1.Container {
 	return corev1.Container{
 		Name:            storageRestContainerName,
-		Image:           "quay.io/redhat-ai-dev/model-catalog-storage-rest:latest",
+		Image:           config.GetStorageRestImage(cfg),
 		ImagePullPolicy: corev1.PullAlways,
-		Env:             append(getPodEnvVars(), append(storageRestEnvVars, normalizerEnvVar)...),
+		Env:             append(getPodEnvVars(), config.GetStorageRestEnvVars(cfg)...),
 		EnvFrom:         []corev1.EnvFromSource{getServiceAccountTokenRef()},
 		VolumeMounts:    []corev1.VolumeMount{pluginsVolumeMount},
 		WorkingDir:      containerWorkingDir,
 	}
 }
 
-func getNormalizerContainer() corev1.Container {
-	return corev1.Container{
+func getNormalizerContainer(cfg *config.NormalizerConfig) corev1.Container {
+	container := corev1.Container{
 		Name:            normalizerContainerName,
-		Image:           "quay.io/redhat-ai-dev/model-catalog-rhoai-normalizer:latest",
+		Image:           config.GetNormalizerImage(cfg),
 		ImagePullPolicy: corev1.PullAlways,
-		Env:             append(getPodEnvVars(), normalizerEnvVar),
+		Env:             append(getPodEnvVars(), config.GetNormalizerEnvVars(cfg)...),
 		EnvFrom:         []corev1.EnvFromSource{getServiceAccountTokenRef()},
 		VolumeMounts:    []corev1.VolumeMount{pluginsVolumeMount},
 		WorkingDir:      containerWorkingDir,
 	}
+
+	if cfg != nil && cfg.PprofAddress != "" {
+		container.Args = append(container.Args, "--pprof-address", cfg.PprofAddress)
+	}
+
+	return container
 }
 
 func getContainerByNameFunc(name string) func(corev1.Container) bool {
@@ -139,7 +130,7 @@ func getVolumeByNameFunc(name string) func(corev1.Volume) bool {
 	return func(v corev1.Volume) bool { return v.Name == name }
 }
 
-func PatchDeploymentSpec(deploymentSpec *appsv1.Deployment) error {
+func PatchDeploymentSpec(cfg config.ModelCatalogConfig, deploymentSpec *appsv1.Deployment) error {
 	serviceAccountTokenName := serviceaccount.GetServiceAccountTokenName(serviceaccount.ServiceAccountName)
 
 	// Patch volume mapping to service account token secret
@@ -155,9 +146,9 @@ func PatchDeploymentSpec(deploymentSpec *appsv1.Deployment) error {
 
 	// Patch sidecar containers for model catalog
 	deploymentSpec.Spec.Template.Spec.Containers = append(deploymentSpec.Spec.Template.Spec.Containers,
-		getLocationContainer(),
-		getStorageRestContainer(),
-		getNormalizerContainer(),
+		getLocationContainer(cfg.Location),
+		getStorageRestContainer(cfg.StorageRest),
+		getNormalizerContainer(cfg.Normalizer),
 	)
 	return nil
 }

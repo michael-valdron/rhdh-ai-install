@@ -11,4 +11,12 @@ const (
 	DefaultTimeout        = 10 * time.Minute         // Default timeout of executions
 	DefaultIsOperator     = false                    // Default value if RHDH deployment is from the operator
 	DefaultRHOAINamespace = "rhoai-model-registries" // Default namespace for RHOAI resources
+
+	// ModelCatalog
+
+	NormalizerFormatVarName = "NORMALIZER_FORMAT"
+	StorageUrlVarName       = "STORAGE_URL"
+	PollingIntervalVarName  = "POLLING_INTERVAL"
+	LocationUrlVarName      = "BRIDGE_URL"
+	StorageTypeVarName      = "STORAGE_TYPE"
 )

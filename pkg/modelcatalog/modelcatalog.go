@@ -16,23 +16,23 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
-func patchBackstageCR(ctx context.Context, c *client.Client, name string) error {
+func patchBackstageCR(ctx context.Context, c *client.Client, cfg config.Config) error {
 	gvr := deployment.NewBackstageGVR()
-	deploymentPatch, err := c.GetUnstructured(ctx, gvr, name, client.ClientParams{}, metav1.GetOptions{})
+	deploymentPatch, err := c.GetUnstructured(ctx, gvr, cfg.Global.DeveloperHub.DeployName, client.ClientParams{}, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
 
-	if err = deployment.PatchBackstageSpec(deploymentPatch); err != nil {
+	if err = deployment.PatchBackstageSpec(cfg.ModelCatalog, deploymentPatch); err != nil {
 		return err
 	}
 
 	return c.PatchUnstructured(ctx, gvr, deploymentPatch, metav1.PatchOptions{})
 }
 
-func unpatchBackstageCR(ctx context.Context, c *client.Client, name string) error {
+func unpatchBackstageCR(ctx context.Context, c *client.Client, cfg config.Config) error {
 	gvr := deployment.NewBackstageGVR()
-	deploymentPatch, err := c.GetUnstructured(ctx, gvr, name, client.ClientParams{}, metav1.GetOptions{})
+	deploymentPatch, err := c.GetUnstructured(ctx, gvr, cfg.Global.DeveloperHub.DeployName, client.ClientParams{}, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
@@ -44,21 +44,21 @@ func unpatchBackstageCR(ctx context.Context, c *client.Client, name string) erro
 	return c.PatchUnstructured(ctx, gvr, deploymentPatch, metav1.PatchOptions{})
 }
 
-func patchDeployment(ctx context.Context, c *client.Client, name string) error {
-	deploymentPatch, err := c.Deployments(client.ClientParams{}).Get(ctx, name, metav1.GetOptions{})
+func patchDeployment(ctx context.Context, c *client.Client, cfg config.Config) error {
+	deploymentPatch, err := c.Deployments(client.ClientParams{}).Get(ctx, cfg.Global.DeveloperHub.DeployName, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
 
-	if err = deployment.PatchDeploymentSpec(deploymentPatch); err != nil {
+	if err = deployment.PatchDeploymentSpec(cfg.ModelCatalog, deploymentPatch); err != nil {
 		return err
 	}
 
 	return deployment.PatchDeployment(ctx, c, deploymentPatch, metav1.PatchOptions{})
 }
 
-func unpatchDeployment(ctx context.Context, c *client.Client, name string) error {
-	deploymentPatch, err := c.Deployments(client.ClientParams{}).Get(ctx, name, metav1.GetOptions{})
+func unpatchDeployment(ctx context.Context, c *client.Client, cfg config.Config) error {
+	deploymentPatch, err := c.Deployments(client.ClientParams{}).Get(ctx, cfg.Global.DeveloperHub.DeployName, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
@@ -203,22 +203,22 @@ func UnpatchDynamicPlugins(ctx context.Context, c *client.Client, configMapName 
 // Patches given RHDH deployment with model catalog integration sidecars.
 // Patches Backstage CR if targeting an RHDH operator install else patches the
 // deployment spec instead.
-func PatchDeployment(ctx context.Context, c *client.Client, name string) error {
+func PatchDeployment(ctx context.Context, c *client.Client, cfg config.Config) error {
 	if c.Options.RhdhOperator {
-		return patchBackstageCR(ctx, c, name)
+		return patchBackstageCR(ctx, c, cfg)
 	} else {
-		return patchDeployment(ctx, c, name)
+		return patchDeployment(ctx, c, cfg)
 	}
 }
 
 // Removes patches from the given RHDH deployment with model catalog integration sidecars.
 // Removes patches from Backstage CR if targeting an RHDH operator install else removes from the
 // deployment spec instead.
-func UnpatchDeployment(ctx context.Context, c *client.Client, name string) error {
+func UnpatchDeployment(ctx context.Context, c *client.Client, cfg config.Config) error {
 	if c.Options.RhdhOperator {
-		return unpatchBackstageCR(ctx, c, name)
+		return unpatchBackstageCR(ctx, c, cfg)
 	} else {
-		return unpatchDeployment(ctx, c, name)
+		return unpatchDeployment(ctx, c, cfg)
 	}
 }
 
@@ -293,7 +293,7 @@ func Install(ctx context.Context, c *client.Client, cfg config.Config) error {
 		return err
 	}
 
-	if err := PatchDeployment(ctx, c, cfg.Global.DeveloperHub.DeployName); err != nil {
+	if err := PatchDeployment(ctx, c, cfg); err != nil {
 		return err
 	}
 
@@ -310,7 +310,7 @@ func Uninstall(ctx context.Context, c *client.Client, cfg config.Config) error {
 		rhdhNamespace = c.Namespace
 	}
 
-	if err := UnpatchDeployment(ctx, c, cfg.Global.DeveloperHub.DeployName); err != nil {
+	if err := UnpatchDeployment(ctx, c, cfg); err != nil {
 		return err
 	}
 

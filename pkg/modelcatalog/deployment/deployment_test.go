@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/redhat-ai-dev/rhdh-ai-install/pkg/config"
 	"github.com/redhat-ai-dev/rhdh-ai-install/pkg/modelcatalog/serviceaccount"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -91,9 +92,9 @@ func makeMockPatchedDeployment() appsv1.Deployment {
 	})
 
 	deploySpec.Spec.Template.Spec.Containers = append(deploySpec.Spec.Template.Spec.Containers,
-		getLocationContainer(),
-		getStorageRestContainer(),
-		getNormalizerContainer(),
+		getLocationContainer(nil),
+		getStorageRestContainer(nil),
+		getNormalizerContainer(nil),
 	)
 
 	return deploySpec
@@ -114,7 +115,7 @@ func TestPatchDeploymentSpec(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(tt *testing.T) {
-			err := PatchDeploymentSpec(&test.deployment)
+			err := PatchDeploymentSpec(config.ModelCatalogConfig{}, &test.deployment)
 
 			if err != nil {
 				tt.Fatalf("unexpected error: %v", err)

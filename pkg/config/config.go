@@ -27,19 +27,36 @@ type DeveloperHubConfig struct {
 // LocationConfig encapsulates configuration parameters for the location sidecar container, including its image.
 // If not set in ModelCatalogConfig, it assumes default values; otherwise, the Image field overrides the default image to use.
 type LocationConfig struct {
-	Image string `json:"image,omitempty"` // Custom image for the location sidecar container; if omitted, defaults are used.
+	Image      string `json:"image,omitempty"`       // Custom image for the location sidecar container; if omitted, defaults are used.
+	Address    string `json:"address,omitempty"`     // The port the location service listens on; if omitted, defaults are used.
+	StorageUrl string `json:"storage-url,omitempty"` // The REST endpoint of the storage container; if omitted, defaults are used.
+	// Data format for the normalizer, can either be `JsonArrayFormat` for our new format from the schema folder, or the legacy
+	// `CatalogInfoYamlFormat`; if omitted, defaults are used (`JsonArrayFormat`).
+	NormalizerFormat string `json:"normalizer-format,omitempty"`
 }
 
 // StorageRestConfig encapsulates configuration parameters for the storage-rest sidecar container, including its image.
 // If not set in ModelCatalogConfig, it assumes default values; otherwise, the Image field overrides the default image to use.
 type StorageRestConfig struct {
-	Image string `json:"image,omitempty"` // Custom image for the storage-rest sidecar container; if omitted, defaults are used.
+	Image       string `json:"image,omitempty"`        // Custom image for the storage-rest sidecar container; if omitted, defaults are used.
+	Address     string `json:"address,omitempty"`      // The port the storage service listens on; if omitted, defaults are used.
+	LocationUrl string `json:"location-url,omitempty"` // The REST endpoint of our location container; if omitted, defaults are used.
+	StorageType string `json:"storage-type,omitempty"` // The storage type used, for now only the development mode `ConfigMap` is supported; we'll add `GitHub` soon.
+	// Data format for the normalizer, can either be `JsonArrayFormat` for our new format from the schema folder, or the legacy
+	// `CatalogInfoYamlFormat`; if omitted, defaults are used (`JsonArrayFormat`).
+	NormalizerFormat string `json:"normalizer-format,omitempty"`
 }
 
 // NormalizerConfig encapsulates configuration parameters for the normalizer sidecar container, including its image.
 // If not set in ModelCatalogConfig, it assumes default values; otherwise, the Image field overrides the default image to use.
 type NormalizerConfig struct {
-	Image string `json:"image,omitempty"` // Custom image for the normalizer sidecar container; if omitted, defaults are used.
+	Image           string         `json:"image,omitempty"`            // Custom image for the normalizer sidecar container; if omitted, defaults are used.
+	PprofAddress    string         `json:"pprof-address,omitempty"`    // The address the pprof endpoint binds to; if omitted, defaults are used.
+	StorageUrl      string         `json:"storage-url,omitempty"`      // The REST endpoint of the storage container; if omitted, defaults are used.
+	PollingInterval *time.Duration `json:"polling-interval,omitempty"` // The interval at which the RHOAI Model Registry REST endpoint is polled for updates; if omitted, defaults are used.
+	// Data format for the normalizer, can either be `JsonArrayFormat` for our new format from the schema folder, or the legacy
+	// `CatalogInfoYamlFormat`; if omitted, defaults are used (`JsonArrayFormat`).
+	NormalizerFormat string `json:"normalizer-format,omitempty"`
 }
 
 // ModelCatalogConfig encapsulates all configuration parameters specific to the model catalog integration.
